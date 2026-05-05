@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-
 	"slouchdog/tdlib"
 )
 
@@ -11,11 +10,12 @@ func main() {
 	tdlib := tdlib.Init()
 	defer tdlib.Destroy()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	go tdlib.Receive(ctx)
+	updates := tdlib.Receive(ctx)
 
-	for update := range tdlib.Updates {
+	for update := range updates {
 		fmt.Println("Received update:", update)
 	}
 }
