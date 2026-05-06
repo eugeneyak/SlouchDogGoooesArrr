@@ -11,7 +11,6 @@ import "C"
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"unsafe"
 )
@@ -78,15 +77,12 @@ func (c *Client) receive(ctx context.Context, updates chan Update) {
 				continue
 			}
 
-			str := C.GoString(raw)
+			json := C.GoString(raw)
 
-			var update Update
+			update, error := Unmarshal([]byte(json))
 
-			if err := json.Unmarshal([]byte(str), &update); err == nil {
-				update.Payload = str
-				updates <- update
-			} else {
-				c.log.Printf("Failed to unmarshal update: %s", err.Error())
+			if error == nil {
+				update.Handle()
 			}
 		}
 	}
