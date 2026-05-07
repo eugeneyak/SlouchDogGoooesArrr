@@ -11,44 +11,58 @@ import "C"
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"unsafe"
 )
 
-// Client wraps a TDLib JSON client instance.
-type Client struct {
+type Update interface {
+	Handle()
+}
+
+type Action interface{}
+
+// TDLib wraps a TDLib JSON client instance.
+type TDLib struct {
 	ptr unsafe.Pointer
 	log *log.Logger
 }
 
 // Creates a new TDLib JSON client instance.
-func Init() *Client {
+func Init() *TDLib {
 	log := log.New(log.Writer(), "[TDLib] ", log.LstdFlags|log.Lshortfile)
 	ptr := C.td_json_client_create()
 
 	log.Println("TDLib client initialized:", ptr)
 
-	return &Client{
+	return &TDLib{
 		ptr: unsafe.Pointer(ptr),
 		log: log,
 	}
 }
 
 // Send sends a JSON-formatted request to the TDLib client.
-func (c *Client) Send(request string) {
-	cRequest := C.CString(request)
+func (td *TDLib) Send(action Action) error {
+	json, err := json.Marshal(action)
+	if err != nil {
+		td.log.Println("Error marshaling action:", err)
+		return err
+	}
+
+	cRequest := C.CString(string(json))
 	defer C.free(unsafe.Pointer(cRequest))
 
-	C.td_json_client_send(c.ptr, cRequest)
+	C.td_json_client_send(td.ptr, cRequest)
+	return nil
 }
 
 // Execute synchronously executes a TDLib request.
 // The returned string is valid until the next call to Receive or Execute.
-func (c *Client) Execute(request string) string {
+func (td *TDLib) Execute(request string) string {
 	cRequest := C.CString(request)
 	defer C.free(unsafe.Pointer(cRequest))
 
-	result := C.td_json_client_execute(c.ptr, cRequest)
+	result := C.td_json_client_execute(td.ptr, cRequest)
 	if result == nil {
 		return ""
 	}
@@ -58,21 +72,21 @@ func (c *Client) Execute(request string) string {
 
 // Receive waits for a TDLib response or update for up to timeout seconds.
 // It returns the JSON response string or an empty string on timeout.
-func (c *Client) Receive(ctx context.Context) chan Update {
+func (td *TDLib) Receive(ctx context.Context) chan Update {
 	channel := make(chan Update)
-	go c.receive(ctx, channel)
+	go td.receive(ctx, channel)
 
 	return channel
 }
 
-func (c *Client) receive(ctx context.Context, updates chan Update) {
+func (td *TDLib) receive(ctx context.Context, updates chan Update) {
 	for {
 		select {
 		case <-ctx.Done():
 			close(updates)
 
 		default:
-			raw := C.td_json_client_receive(c.ptr, C.double(10))
+			raw := C.td_json_client_receive(td.ptr, C.double(10))
 			if raw == nil {
 				continue
 			}
@@ -89,7 +103,7 @@ func (c *Client) receive(ctx context.Context, updates chan Update) {
 }
 
 // Destroy releases the TDLib client instance.
-func (c *Client) Destroy() {
-	C.td_json_client_destroy(c.ptr)
-	c.ptr = nil
+func (td *TDLib) Destroy() {
+	C.td_json_client_destroy(td.ptr)
+	td.ptr = nil
 }

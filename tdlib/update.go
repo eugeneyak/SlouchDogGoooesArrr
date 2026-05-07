@@ -6,10 +6,6 @@ import (
 	"slouchdog/tdlib/update"
 )
 
-type Update interface {
-	Handle()
-}
-
 func Unmarshal(data []byte) (Update, error) {
 	var resolver update.Typed
 
