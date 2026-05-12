@@ -13,14 +13,9 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"slouchdog/tdlib/update"
 	"unsafe"
 )
-
-type Update interface {
-	Handle()
-}
-
-type Action interface{}
 
 // TDLib wraps a TDLib JSON client instance.
 type TDLib struct {
@@ -42,7 +37,7 @@ func Init() *TDLib {
 }
 
 // Send sends a JSON-formatted request to the TDLib client.
-func (td *TDLib) Send(action Action) error {
+func (td *TDLib) Send(action update.Action) error {
 	json, err := json.Marshal(action)
 	if err != nil {
 		td.log.Println("Error marshaling action:", err)
@@ -72,18 +67,21 @@ func (td *TDLib) Execute(request string) string {
 
 // Receive waits for a TDLib response or update for up to timeout seconds.
 // It returns the JSON response string or an empty string on timeout.
-func (td *TDLib) Receive(ctx context.Context) chan Update {
-	channel := make(chan Update)
+func (td *TDLib) Receive(ctx context.Context) chan update.Update {
+	channel := make(chan update.Update)
 	go td.receive(ctx, channel)
 
 	return channel
 }
 
-func (td *TDLib) receive(ctx context.Context, updates chan Update) {
+func (td *TDLib) receive(ctx context.Context, updates chan update.Update) {
 	for {
 		select {
 		case <-ctx.Done():
+			td.log.Println("Receive loop exiting due to context cancellation")
+			td.log.Println(context.Cause(ctx))
 			close(updates)
+			return
 
 		default:
 			raw := C.td_json_client_receive(td.ptr, C.double(10))
@@ -93,10 +91,12 @@ func (td *TDLib) receive(ctx context.Context, updates chan Update) {
 
 			json := C.GoString(raw)
 
-			update, error := Unmarshal([]byte(json))
+			td.log.Println(json)
+
+			update, error := update.Unmarshal([]byte(json))
 
 			if error == nil {
-				update.Handle()
+				updates <- update
 			}
 		}
 	}

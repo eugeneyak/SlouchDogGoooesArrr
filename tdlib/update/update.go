@@ -1,13 +1,15 @@
-package tdlib
+package update
 
 import (
 	"encoding/json"
 	"errors"
-	"slouchdog/tdlib/update"
 )
 
+type Update interface{}
+type Action interface{}
+
 func Unmarshal(data []byte) (Update, error) {
-	var resolver update.Typed
+	var resolver Typed
 
 	if err := json.Unmarshal(data, &resolver); err != nil {
 		return nil, err
@@ -15,7 +17,7 @@ func Unmarshal(data []byte) (Update, error) {
 
 	switch resolver.Type {
 	case "updateAuthorizationState":
-		var update update.UpdateAuthorizationState
+		var update UpdateAuthorizationState
 
 		if err := json.Unmarshal(data, &update); err != nil {
 			return nil, err

@@ -3,19 +3,31 @@ package main
 import (
 	"context"
 	"fmt"
+	"os/signal"
+	"slouchdog/slouchdog"
 	"slouchdog/tdlib"
+	"slouchdog/tdlib/update"
+	"syscall"
 )
 
+var td = tdlib.Init()
+
 func main() {
-	tdlib := tdlib.Init()
-	defer tdlib.Destroy()
+	defer td.Destroy()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, _ := signal.NotifyContext(
+		context.Background(), syscall.SIGINT,
+	)
 
-	updates := tdlib.Receive(ctx)
+	updates := td.Receive(ctx)
 
-	for update := range updates {
-		fmt.Println("Received update:", update)
+	for u := range updates {
+		switch v := u.(type) {
+		case update.UpdateAuthorizationState:
+			slouchdog.Authorize(td, v)
+
+		default:
+			fmt.Println("Unhandled update type:", v)
+		}
 	}
 }
