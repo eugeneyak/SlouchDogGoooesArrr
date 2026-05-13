@@ -2,6 +2,8 @@ package slouchdog
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 
 	"slouchdog/tdlib"
 	"slouchdog/tdlib/action"
@@ -11,10 +13,15 @@ import (
 func Authorize(td *tdlib.TDLib, update update.UpdateAuthorizationState) {
 	switch update.AuthorizationState.Type {
 	case "authorizationStateWaitTdlibParameters":
+		id, err := strconv.Atoi(os.Getenv("APIID"))
+		if err != nil {
+			panic("Error converting APIID to integer")
+		}
+
 		td.Send(action.SetTdlibParameters{
 			Type:               "setTdlibParameters",
-			APIID:              0,
-			APIHash:            "00000000000000000000000000000000",
+			APIID:              int32(id),
+			APIHash:            os.Getenv("APIHASH"),
 			SystemLanguageCode: "en-US",
 			DeviceModel:        "Slouchdog",
 			ApplicationVersion: "0.0.1",
