@@ -37,10 +37,12 @@ func Init() *TDLib {
 }
 
 // Send sends a JSON-formatted request to the TDLib client.
-func (td *TDLib) Send(action update.Action) error {
-	json, err := json.Marshal(action)
+func (td *TDLib) Send(method string, payload map[string]any) error {
+	payload["@type"] = method
+
+	json, err := json.Marshal(payload)
 	if err != nil {
-		td.log.Println("Error marshaling action:", err)
+		td.log.Println("Error marshaling payload:", err)
 		return err
 	}
 
@@ -53,8 +55,16 @@ func (td *TDLib) Send(action update.Action) error {
 
 // Execute synchronously executes a TDLib request.
 // The returned string is valid until the next call to Receive or Execute.
-func (td *TDLib) Execute(request string) string {
-	cRequest := C.CString(request)
+func (td *TDLib) Execute(method string, payload map[string]any) string {
+	payload["@type"] = method
+
+	json, err := json.Marshal(payload)
+	if err != nil {
+		td.log.Println("Error marshaling payload:", err)
+		return ""
+	}
+
+	cRequest := C.CString(string(json))
 	defer C.free(unsafe.Pointer(cRequest))
 
 	result := C.td_json_client_execute(td.ptr, cRequest)
@@ -106,4 +116,26 @@ func (td *TDLib) receive(ctx context.Context, updates chan update.Update) {
 func (td *TDLib) Destroy() {
 	C.td_json_client_destroy(td.ptr)
 	td.ptr = nil
+}
+
+type Payload map[string]any
+
+func (td *TDLib) SetLogVerbosityLevel(level uint8) {
+	td.Execute("setLogVerbosityLevel", Payload{
+		"new_verbosity_level": level,
+	})
+}
+
+func (td *TDLib) SetTdlibParameters(APIID int32, APIHash, SystemLanguageCode, DeviceModel, ApplicationVersion string) {
+	td.Send("setTdlibParameters", Payload{
+		"api_id":               APIID,
+		"api_hash":             APIHash,
+		"system_language_code": SystemLanguageCode,
+		"device_model":         DeviceModel,
+		"application_version":  ApplicationVersion,
+	})
+}
+
+func (td *TDLib) RequestQrCodeAuthentication() {
+	td.Send("requestQrCodeAuthentication", Payload{})
 }

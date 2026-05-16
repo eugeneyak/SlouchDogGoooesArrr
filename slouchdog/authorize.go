@@ -6,31 +6,16 @@ import (
 	"strconv"
 
 	"slouchdog/tdlib"
-	"slouchdog/tdlib/action"
 	"slouchdog/tdlib/update"
 )
 
 func Authorize(td *tdlib.TDLib, update update.UpdateAuthorizationState) {
 	switch update.AuthorizationState.Type {
 	case "authorizationStateWaitTdlibParameters":
-		id, err := strconv.Atoi(os.Getenv("APIID"))
-		if err != nil {
-			panic("Error converting APIID to integer")
-		}
-
-		td.Send(action.SetTdlibParameters{
-			Type:               "setTdlibParameters",
-			APIID:              int32(id),
-			APIHash:            os.Getenv("APIHASH"),
-			SystemLanguageCode: "en-US",
-			DeviceModel:        "Slouchdog",
-			ApplicationVersion: "0.0.1",
-		})
+		authorizeStateWaitTdlibParameters(td)
 
 	case "authorizationStateWaitPhoneNumber":
-		td.Send(action.RequestQrCodeAuthentication{
-			Type: "requestQrCodeAuthentication",
-		})
+		authorizeStateWaitPhoneNumber(td)
 
 	case "authorizationStateWaitOtherDeviceConfirmation":
 		fmt.Println("Waiting for other device confirmation...")
@@ -38,4 +23,17 @@ func Authorize(td *tdlib.TDLib, update update.UpdateAuthorizationState) {
 	default:
 		fmt.Println("Unhandled authorization state:", update.AuthorizationState)
 	}
+}
+
+func authorizeStateWaitTdlibParameters(td *tdlib.TDLib) {
+	id, err := strconv.Atoi(os.Getenv("APIID"))
+	if err != nil {
+		panic("Error converting APIID to integer")
+	}
+
+	td.SetTdlibParameters(int32(id), os.Getenv("APIHASH"), "en-US", "Slouchdog", "0.0.1")
+}
+
+func authorizeStateWaitPhoneNumber(td *tdlib.TDLib) {
+	td.RequestQrCodeAuthentication()
 }

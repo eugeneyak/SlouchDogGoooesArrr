@@ -15,6 +15,8 @@ var td = tdlib.Init()
 func main() {
 	defer td.Destroy()
 
+	td.SetLogVerbosityLevel(1)
+
 	ctx, _ := signal.NotifyContext(
 		context.Background(), syscall.SIGINT,
 	)
