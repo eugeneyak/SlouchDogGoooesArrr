@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"slouchdog/slouchdog"
 	"slouchdog/tdlib"
+	"slouchdog/tdlib/log"
 	"slouchdog/tdlib/update"
 	"syscall"
 )
@@ -15,7 +16,7 @@ var td = tdlib.Init()
 func main() {
 	defer td.Destroy()
 
-	td.SetLogVerbosityLevel(1)
+	td.SetLogVerbosityLevel(log.Error)
 
 	ctx, _ := signal.NotifyContext(
 		context.Background(), syscall.SIGINT,

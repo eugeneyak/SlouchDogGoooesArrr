@@ -23,6 +23,8 @@ type TDLib struct {
 	log *log.Logger
 }
 
+type Payload map[string]any
+
 // Creates a new TDLib JSON client instance.
 func Init() *TDLib {
 	log := log.New(log.Writer(), "[TDLib] ", log.LstdFlags|log.Lshortfile)
@@ -37,7 +39,7 @@ func Init() *TDLib {
 }
 
 // Send sends a JSON-formatted request to the TDLib client.
-func (td *TDLib) Send(method string, payload map[string]any) error {
+func (td *TDLib) Send(method string, payload Payload) error {
 	payload["@type"] = method
 
 	json, err := json.Marshal(payload)
@@ -55,7 +57,7 @@ func (td *TDLib) Send(method string, payload map[string]any) error {
 
 // Execute synchronously executes a TDLib request.
 // The returned string is valid until the next call to Receive or Execute.
-func (td *TDLib) Execute(method string, payload map[string]any) string {
+func (td *TDLib) Execute(method string, payload Payload) string {
 	payload["@type"] = method
 
 	json, err := json.Marshal(payload)
@@ -117,8 +119,6 @@ func (td *TDLib) Destroy() {
 	C.td_json_client_destroy(td.ptr)
 	td.ptr = nil
 }
-
-type Payload map[string]any
 
 func (td *TDLib) SetLogVerbosityLevel(level uint8) {
 	td.Execute("setLogVerbosityLevel", Payload{
