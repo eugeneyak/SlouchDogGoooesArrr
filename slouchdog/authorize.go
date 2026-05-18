@@ -9,7 +9,14 @@ import (
 	"slouchdog/tdlib/update"
 )
 
+var AuthorizationState string
+
 func Authorize(td *tdlib.TDLib, update update.UpdateAuthorizationState) {
+	fmt.Println(update)
+	fmt.Println(update.AuthorizationState)
+
+	AuthorizationState = update.AuthorizationState.Type
+
 	switch update.AuthorizationState.Type {
 	case "authorizationStateWaitTdlibParameters":
 		authorizeStateWaitTdlibParameters(td)
