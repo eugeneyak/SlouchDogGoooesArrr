@@ -2,70 +2,54 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
+	"log"
 	"os"
 	"os/signal"
-	"sync"
-	"syscall"
-	"time"
-
-	"github.com/labstack/echo/v5"
-	"github.com/labstack/echo/v5/middleware"
-
-	"slouchdog/slouchdog"
 	"slouchdog/tdlib"
-	"slouchdog/tdlib/log"
-	"slouchdog/tdlib/update"
+	"syscall"
 )
 
-var wg sync.WaitGroup
-var td *tdlib.TDLib
+type Typed struct {
+	T string `json:"@type"`
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(
 		context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT,
 	)
-
 	defer stop()
 
-	wg.Add(2)
+	// nc, err := bridge.Connect("nats://100.104.158.114:4222")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// 	os.Exit(1)
+	// }
+	// defer nc.Drain()
 
-	go starttdlib(ctx)
-	go startweb(ctx)
-
-	wg.Wait()
-}
-
-func starttdlib(ctx context.Context) {
-	td := tdlib.Init()
+	td, err := tdlib.Init()
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
 	defer td.Destroy()
 
-	td.SetLogVerbosityLevel(log.Error)
+	updates := td.ReceiveAsync(ctx)
 
-	updates := td.Receive(ctx)
+	for update := range updates {
+		var s Typed
+		err := json.Unmarshal(update, &s)
 
-	for u := range updates {
-		switch v := u.(type) {
-		case update.UpdateAuthorizationState:
-			slouchdog.Authorize(td, v)
-
-		default:
-			fmt.Println("Unhandled update type:", v)
+		if err != nil {
+			println(err)
+			continue
 		}
-	}
-}
 
-func startweb(ctx context.Context) {
-	e := echo.New()
-	e.Use(middleware.RequestLogger())
-	e.Use(middleware.Static("./dogface/dist"))
+		// 	msg := nats.NewMsg("tdlib.update")
 
-	sc := echo.StartConfig{
-		Address:         ":1323",
-		GracefulTimeout: 5 * time.Second,
-	}
+		// 	msg.Header.Add("type", s.T)
+		// 	msg.Data = []byte(update)
 
-	if err := sc.Start(ctx, e); err != nil {
-		e.Logger.Error("failed to start server", "error", err)
+		// 	nc.PublishMsg(msg)
 	}
 }
