@@ -1,46 +1,61 @@
-// package bridge
+package bridge
 
-// import (
-// 	"github.com/nats-io/nats.go"
-// 	"github.com/nats-io/nats.go/jetstream"
-// )
+import (
+	"context"
+	"log"
 
-// type Bridge struct {
-// 	nc *nats.Conn
-// }
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+)
 
-// func Connect(url string) (*Bridge, error) {
-// 	nc, err := nats.Connect(url)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+const Subject = "tdlib.update"
 
-// 	js, err := jetstream.New(nc)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+type Bridge struct {
+	nc *nats.Conn
+}
 
-// 	_, err = js.CreateStream(jetstream.StreamConfig{
-// 		Name:      "tdlib.updates",
-// 		Subjects:  []string{"tdlib.update"},
-// 		MaxMsgs:   10000,
-// 		Retention: jetstream.InterestPolicy,
-// 	})
-// 	if err != nil {
-// 		return nil, err
-// 	}
+func Connect(ctx context.Context, url string) (*Bridge, error) {
+	nc, err := nats.Connect(url)
+	if err != nil {
+		return nil, err
+	}
 
-// 	bridge := Bridge{
-// 		nc: nc,
-// 	}
+	js, err := jetstream.New(nc)
+	if err != nil {
+		return nil, err
+	}
 
-// 	return &bridge, nil
-// }
+	config := jetstream.StreamConfig{
+		Name:      "TDLibUpdates",
+		Subjects:  []string{Subject},
+		MaxMsgs:   10000,
+		Retention: jetstream.InterestPolicy,
+	}
 
-// func (bridge *Bridge) Drain() {
-// 	bridge.nc.Drain()
-// }
+	_, err = js.CreateStream(ctx, config)
+	if err != nil {
+		return nil, err
+	}
 
-// func (bridge *Bridge) Emit(message Message) {
+	bridge := Bridge{
+		nc: nc,
+	}
 
-// }
+	return &bridge, nil
+}
+
+func (bridge *Bridge) Drain() {
+	bridge.nc.Drain()
+}
+
+func (bridge *Bridge) EmitUpdate(typ string, json []byte) {
+	msg := nats.NewMsg(Subject)
+
+	msg.Data = json
+	msg.Header.Add("type", typ)
+
+	err := bridge.nc.PublishMsg(msg)
+	if err != nil {
+		log.Println(err)
+	}
+}

@@ -1,6 +1,11 @@
+Dockerfile
+
+*.md
+
 .git
 .gitignore
 .dockerignore
-*.md
 .env
 .env.local
+
+td.binlog

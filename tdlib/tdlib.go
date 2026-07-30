@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"unsafe"
 )
@@ -39,6 +40,8 @@ func Init() (*TDLib, error) {
 		ptr: unsafe.Pointer(ptr),
 	}
 
+	td.SetLogVerbosityLevel(Fatal)
+
 	return &td, nil
 }
 
@@ -61,25 +64,22 @@ func Init() (*TDLib, error) {
 
 // Execute synchronously executes a TDLib request.
 // The returned string is valid until the next call to Receive or Execute.
-// func (td *TDLib) Execute(method string, payload Payload) string {
-// 	payload["@type"] = method
+func (td *TDLib) execute(method string, payload map[string]any) error {
+	payload["@type"] = method
 
-// 	json, err := json.Marshal(payload)
-// 	if err != nil {
-// 		td.log.Println("Error marshaling payload:", err)
-// 		return ""
-// 	}
+	json, err := json.Marshal(payload)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
 
-// 	cRequest := C.CString(string(json))
-// 	defer C.free(unsafe.Pointer(cRequest))
+	CJson := C.CString(string(json))
+	defer C.free(unsafe.Pointer(CJson))
 
-// 	result := C.td_json_client_execute(td.ptr, cRequest)
-// 	if result == nil {
-// 		return ""
-// 	}
+	C.td_json_client_execute(td.ptr, CJson)
 
-// 	return C.GoString(result)
-// }
+	return nil
+}
 
 // Receive waits for a TDLib response or update for up to timeout seconds.
 // It returns the JSON response string or an empty string on timeout.
@@ -115,22 +115,8 @@ func (td *TDLib) Destroy() {
 	td.ptr = nil
 }
 
-// func (td *TDLib) SetLogVerbosityLevel(level uint8) {
-// 	td.Execute("setLogVerbosityLevel", Payload{
-// 		"new_verbosity_level": level,
-// 	})
-// }
-
-// func (td *TDLib) SetTdlibParameters(APIID int32, APIHash, SystemLanguageCode, DeviceModel, ApplicationVersion string) {
-// 	td.Send("setTdlibParameters", Payload{
-// 		"api_id":               APIID,
-// 		"api_hash":             APIHash,
-// 		"system_language_code": SystemLanguageCode,
-// 		"device_model":         DeviceModel,
-// 		"application_version":  ApplicationVersion,
-// 	})
-// }
-
-// func (td *TDLib) RequestQrCodeAuthentication() {
-// 	td.Send("requestQrCodeAuthentication", Payload{})
-// }
+func (td *TDLib) SetLogVerbosityLevel(level uint8) {
+	td.execute("setLogVerbosityLevel", map[string]any{
+		"new_verbosity_level": level,
+	})
+}

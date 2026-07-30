@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"slouchdog/bridge"
 	"slouchdog/tdlib"
 	"syscall"
 )
@@ -20,12 +21,12 @@ func main() {
 	)
 	defer stop()
 
-	// nc, err := bridge.Connect("nats://100.104.158.114:4222")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// 	os.Exit(1)
-	// }
-	// defer nc.Drain()
+	bridge, err := bridge.Connect(ctx, "nats://100.104.158.114:4222")
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+	defer bridge.Drain()
 
 	td, err := tdlib.Init()
 	if err != nil {
@@ -45,11 +46,8 @@ func main() {
 			continue
 		}
 
-		// 	msg := nats.NewMsg("tdlib.update")
+		log.Println(s.T)
 
-		// 	msg.Header.Add("type", s.T)
-		// 	msg.Data = []byte(update)
-
-		// 	nc.PublishMsg(msg)
+		bridge.EmitUpdate(s.T, update)
 	}
 }
