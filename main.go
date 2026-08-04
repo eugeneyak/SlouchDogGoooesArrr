@@ -8,7 +8,10 @@ import (
 	"os/signal"
 	"slouchdog/bridge"
 	"slouchdog/tdlib"
+	"sync"
 	"syscall"
+
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type Typed struct {
@@ -16,38 +19,56 @@ type Typed struct {
 }
 
 func main() {
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		log.Fatalln("NATS_URL is empty")
+	}
+
 	ctx, stop := signal.NotifyContext(
 		context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT,
 	)
 	defer stop()
 
-	bridge, err := bridge.Connect(ctx, "nats://100.104.158.114:4222")
+	bridge, err := bridge.Connect(ctx, natsURL)
 	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
+		log.Fatalln(err)
 	}
 	defer bridge.Drain()
 
 	td, err := tdlib.Init()
 	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
+		log.Fatalln(err)
 	}
 	defer td.Destroy()
 
-	updates := td.ReceiveAsync(ctx)
+	var wg sync.WaitGroup
+	wg.Go(func() { forwardMethods(ctx, td, bridge) })
+	wg.Go(func() { forwardUpdates(ctx, td, bridge) })
+	wg.Wait()
+}
 
-	for update := range updates {
+func forwardMethods(ctx context.Context, td *tdlib.TDLib, bridge *bridge.Bridge) {
+	err := bridge.Consume(ctx, func(msg jetstream.Msg) {
+		td.SendJSON(string(msg.Data()))
+		msg.DoubleAck(ctx)
+	})
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func forwardUpdates(ctx context.Context, td *tdlib.TDLib, bridge *bridge.Bridge) {
+	for update := range td.Updates(ctx) {
 		var s Typed
-		err := json.Unmarshal(update, &s)
 
+		err := json.Unmarshal([]byte(update), &s)
 		if err != nil {
-			println(err)
+			log.Println(err)
 			continue
 		}
 
 		log.Println(s.T)
 
-		bridge.EmitUpdate(s.T, update)
+		bridge.EmitUpdate(s.T, []byte(update))
 	}
 }

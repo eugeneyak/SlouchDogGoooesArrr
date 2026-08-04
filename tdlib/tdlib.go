@@ -12,6 +12,7 @@ import "C"
 import (
 	"context"
 	"encoding/json"
+	"iter"
 	"log"
 	"unsafe"
 )
@@ -46,21 +47,13 @@ func Init() (*TDLib, error) {
 }
 
 // Send sends a JSON-formatted request to the TDLib client.
-// func (td *TDLib) Send(method string, payload Payload) error {
-// 	payload["@type"] = method
+func (td *TDLib) SendJSON(json string) error {
+	cRequest := C.CString(string(json))
+	defer C.free(unsafe.Pointer(cRequest))
 
-// 	json, err := json.Marshal(payload)
-// 	if err != nil {
-// 		td.log.Println("Error marshaling payload:", err)
-// 		return err
-// 	}
-
-// 	cRequest := C.CString(string(json))
-// 	defer C.free(unsafe.Pointer(cRequest))
-
-// 	C.td_json_client_send(td.ptr, cRequest)
-// 	return nil
-// }
+	C.td_json_client_send(td.ptr, cRequest)
+	return nil
+}
 
 // Execute synchronously executes a TDLib request.
 // The returned string is valid until the next call to Receive or Execute.
@@ -73,37 +66,37 @@ func (td *TDLib) execute(method string, payload map[string]any) error {
 		return err
 	}
 
-	CJson := C.CString(string(json))
-	defer C.free(unsafe.Pointer(CJson))
+	return td.executeJSON(string(json))
+}
 
-	C.td_json_client_execute(td.ptr, CJson)
+func (td *TDLib) executeJSON(json string) error {
+	cJson := C.CString(string(json))
+	defer C.free(unsafe.Pointer(cJson))
 
+	C.td_json_client_execute(td.ptr, cJson)
 	return nil
 }
 
-// Receive waits for a TDLib response or update for up to timeout seconds.
-// It returns the JSON response string or an empty string on timeout.
-func (td *TDLib) ReceiveAsync(ctx context.Context) chan []byte {
-	channel := make(chan []byte)
-	go td.receive(ctx, channel)
+func (td *TDLib) Updates(ctx context.Context) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
 
-	return channel
-}
+			default:
+				raw := C.td_json_client_receive(td.ptr, C.double(2))
 
-func (td *TDLib) receive(ctx context.Context, updates chan []byte) {
-	for {
-		select {
-		case <-ctx.Done():
-			close(updates)
-			return
+				if raw == nil {
+					continue
+				}
 
-		default:
-			raw := C.td_json_client_receive(td.ptr, C.double(2))
-			if raw == nil {
-				continue
+				s := C.GoString(raw)
+
+				if !yield(s) {
+					return
+				}
 			}
-
-			updates <- []byte(C.GoString(raw))
 		}
 	}
 }
