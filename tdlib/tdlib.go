@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"iter"
 	"log"
+	"sync"
 	"unsafe"
 )
 
@@ -28,6 +29,7 @@ const (
 
 // TDLib wraps a TDLib JSON client instance.
 type TDLib struct {
+	mu  sync.RWMutex
 	ptr unsafe.Pointer
 }
 
@@ -41,51 +43,56 @@ func Init() (*TDLib, error) {
 		ptr: unsafe.Pointer(ptr),
 	}
 
-	td.SetLogVerbosityLevel(Fatal)
-
 	return &td, nil
 }
 
-// Send sends a JSON-formatted request to the TDLib client.
-func (td *TDLib) SendJSON(json string) error {
-	cRequest := C.CString(string(json))
+// SendJSON sends a JSON-formatted request to the TDLib client.
+func (td *TDLib) SendJSON(json string) {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+
+	cRequest := C.CString(json)
 	defer C.free(unsafe.Pointer(cRequest))
 
 	C.td_json_client_send(td.ptr, cRequest)
-	return nil
 }
 
 // Execute synchronously executes a TDLib request.
-// The returned string is valid until the next call to Receive or Execute.
 func (td *TDLib) execute(method string, payload map[string]any) error {
 	payload["@type"] = method
 
-	json, err := json.Marshal(payload)
+	raw, err := json.Marshal(payload)
 	if err != nil {
-		log.Println(err)
 		return err
 	}
 
-	return td.executeJSON(string(json))
+	td.executeJSON(string(raw))
+
+	return nil
 }
 
-func (td *TDLib) executeJSON(json string) error {
-	cJson := C.CString(string(json))
+func (td *TDLib) executeJSON(json string) {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+
+	cJson := C.CString(json)
 	defer C.free(unsafe.Pointer(cJson))
 
 	C.td_json_client_execute(td.ptr, cJson)
-	return nil
 }
 
 func (td *TDLib) Updates(ctx context.Context) iter.Seq[string] {
 	return func(yield func(string) bool) {
+		td.mu.RLock()
+		defer td.mu.RUnlock()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
 
 			default:
-				raw := C.td_json_client_receive(td.ptr, C.double(2))
+				raw := C.td_json_client_receive(td.ptr, C.double(0.5))
 
 				if raw == nil {
 					continue
@@ -101,8 +108,13 @@ func (td *TDLib) Updates(ctx context.Context) iter.Seq[string] {
 	}
 }
 
-// Destroy releases the TDLib client instance.
+// Destroy releases the TDLib client instance. After Destroy returns, all
+// pending and future calls to SendJSON, execute and Updates report the client
+// as destroyed instead of touching the freed pointer.
 func (td *TDLib) Destroy() {
+	td.mu.Lock()
+	defer td.mu.Unlock()
+
 	C.td_json_client_destroy(td.ptr)
 	log.Println("TDLib client destroed:", td.ptr)
 	td.ptr = nil

@@ -39,6 +39,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	td.SetLogVerbosityLevel(tdlib.Fatal)
 	defer td.Destroy()
 
 	var wg sync.WaitGroup
